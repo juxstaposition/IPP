@@ -30,6 +30,7 @@ while (($parsedLine = $parser->parse()) !== FALSE) {
 		$generator->genLine($parsedLine);
 	}
 }
+$stats->printVals();
 
 $generator->XMLEnd();
 
@@ -153,12 +154,8 @@ class XMLGen{
 				}	
 			}	
 		}
-
-
 		$this->xml->endElement();
-		
 	}
-
 }
 
 /**
@@ -222,7 +219,6 @@ class Parser{
 			}
 
 		}
-//		echo 'trimmed decomented :'.$this->line.':'.PHP_EOL;
 
 		$this->line = explode(' ', $this->line);
 
@@ -233,6 +229,7 @@ class Parser{
 		$this->analyzer();
 
 		$this->insOrder++;
+		$this->stats->incCount('loc');
 		return $this->line;
 	}
 
@@ -260,13 +257,12 @@ class Parser{
 				break;
 
 			// OPCODE <label>
+			case 'JUMP':
+				$this->stats->incCount('jumps');
 			case 'CALL':
 			case 'LABEL':
-			case 'JUMP':
 				if($this->line['argCount'] == 1){
-					if($this->checkLabel($this->line[1])){
-
-					}
+					return $this->checkLabel($this->line[1]);
 				}
 				else{
 					terminateScript("Err line $this->lineNmr, Invalid arg count",ERR_LEX_SYNT);
@@ -280,9 +276,7 @@ class Parser{
 			case 'EXIT':	
 			case 'DPRINT':	
 				if($this->line['argCount'] == 1){
-					if($this->checkSymb($this->line[1])){
-						
-					}					
+					return $this->checkSymb($this->line[1]);			
 				}
 				else{
 					terminateScript("Err line $this->lineNmr, Invalid arg count",ERR_LEX_SYNT);
@@ -293,9 +287,7 @@ class Parser{
 			case 'DEFVAR':
 			case 'POPS':
 				if($this->line['argCount'] == 1){
-					if($this->checkVar($this->line[1])){
-						
-					}					
+					return $this->checkVar($this->line[1]);			
 				}
 				else{
 					terminateScript("Err line $this->lineNmr, Invalid arg count",ERR_LEX_SYNT);
@@ -309,9 +301,7 @@ class Parser{
 			case 'TYPE':
 			case 'INT2CHAR':
 				if($this->line['argCount'] == 2){
-					if($this->checkVar($this->line[1]) && $this->checkSymb($this->line[2])){
-						
-					}					
+					return $this->checkVar($this->line[1]) && $this->checkSymb($this->line[2]);			
 				}
 				else{
 					terminateScript("Err line $this->lineNmr, Invalid arg count",ERR_LEX_SYNT);
@@ -321,9 +311,7 @@ class Parser{
 			// OPCEDE <var> <type>
 			case 'READ':
 				if($this->line['argCount'] == 2){
-					if($this->checkVar($this->line[1]) && $this->checkType($this->line[2])){
-						
-					}
+					return $this->checkVar($this->line[1]) && $this->checkType($this->line[2]);
 				}
 				else{
 					terminateScript("Err line $this->lineNmr, Invalid arg count",ERR_LEX_SYNT);
@@ -346,9 +334,7 @@ class Parser{
 			case 'GETCHAR':
 			case 'SETCHAR':
 				if($this->line['argCount'] == 3){
-					if($this->checkVar($this->line[1]) && $this->checkSymb($this->line[2]) && $this->checkSymb($this->line[3])){
-						
-					}
+					return $this->checkVar($this->line[1]) && $this->checkSymb($this->line[2]) && $this->checkSymb($this->line[3]);
 				}
 				else{
 					terminateScript("Err line $this->lineNmr, Invalid arg count",ERR_LEX_SYNT);
@@ -360,7 +346,8 @@ class Parser{
 			case 'JUMPIFNEQ':
 				if($this->line['argCount'] == 3){
 					if($this->checkLabel($this->line[1]) && $this->checkSymb($this->line[2]) && $this->checkSymb($this->line[3])){
-						
+						$this->stats->incCount('jumps');
+						return true;
 					}
 				}
 				else{
