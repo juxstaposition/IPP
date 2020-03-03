@@ -22,7 +22,7 @@ checkArgs($stats);
 $parser = new Parser($stats);
 $generator = new XMLGen();
 
-// Hlavne telo programu, kde su instrukcie spracovavane a po riadkoch
+// HTelo programu, kde su instrukcie spracovavane a po riadkoch
 // nacitane zo stdin. Parser vykona syntakticku a lexikalnu analyzu
 // a vrati pole s intrukciami a ich argumentmi pre generator XML kodu
 while (($parsedLine = $parser->parse()) !== FALSE) {
@@ -30,11 +30,21 @@ while (($parsedLine = $parser->parse()) !== FALSE) {
 		$generator->genLine($parsedLine);
 	}
 }
-$stats->printVals();
 
 $generator->XMLEnd();
+$stats->writeStats();
 
 return 0;
+
+
+/**
+ *	Funckia na vypis chyboveho vystupu
+ *	a ukoncenie programu so predpokladanym chybovym kodom
+ */
+function terminateScript($errMsg, $errCode){
+	fwrite(STDERR, $errMsg);
+	exit($errCode);
+}
 
 /**
  *	Funkcia na kontrolu spravnosti argumentov
@@ -45,7 +55,7 @@ function checkArgs($stats){
 	global $argv, $argc;
 
 	if($argc == 1){
-		return 0;
+		return true;
 	}
 	elseif($argc > 1){
 		$optsArray = array('--comments','--labels','--jumps','--loc','--help',"parse.php");
@@ -61,19 +71,14 @@ function checkArgs($stats){
 			
 			$stats->setFileName($opts['stats']);
 
-			if(array_key_exists("comments", $opts)){
-				$stats->setComments(1);
+			$statsArray = array('--comments','--labels','--jumps','--loc');
+			foreach ($argv as $value) {
+				if(in_array($value, $statsArray)){
+					array_push($stats->outputStats, $value);
+				}
 			}
-			if(array_key_exists("labels", $opts)){
-				$stats->setLabels(1);
-			}
-			if(array_key_exists("jumps", $opts)){
-				$stats->setJumps(1);
-			}
-			if(array_key_exists("loc", $opts)){
-				$stats->setLoc(1);
-			}
-			return 0;
+
+			return true;
 		}
 		elseif (array_key_exists("help", $opts) && $argc == 2){
 			fwrite(STDOUT, "\nNápoveda\nSúbor:parse.php\nAutor:Daniel Očenáš (xocena06)\nTento skript kontroluje lexikálnu a syntaktickú správnosť\nkódu IPPcode20 a na štandardný výstup vypíše XML reprezentáciu kódu\nZdrojový kód pre tento skript je načítany zo STDIN\n\nPovolene parametre --help, --stats[=filename][--loc|--comments|--jumps|--labels]* \n");
@@ -83,15 +88,6 @@ function checkArgs($stats){
 	}
 
 	terminateScript("Invalid script parameter/s (run script with param --help for more info)\n",ERR_INV_SCRIPT_PARAM);		
-}
-
-/**
- *	Funckia na vypis chyboveho vystupu
- *	a ukoncenie programu so predpokladanym chybovym kodom
- */
-function terminateScript($errMsg, $errCode){
-	fwrite(STDERR, $errMsg);
-	exit($errCode);
 }
 
 /**
@@ -123,10 +119,9 @@ class XMLGen{
 		echo $this->xml->outputMemory(TRUE); // print xml
 	}
 
-
-
 	/**
-	 *
+	 *	Funkcia generujuca element atribut pre instrukciu
+	 *	Obsahuje atribut type s typom symbolu a textovy obsah
 	 */
 	public function genAttribute($elem,$arg){
 		$this->xml->startElement($elem);
@@ -136,21 +131,20 @@ class XMLGen{
 	}
 
 	/**
-	 *
+	 *	Funkcie generujuca XML reprezentaciu zdrojoveho kodu
+	 *	z nacitaneho riadku. 
 	 */
 	public function genLine($line){
 		$this->xml->startElement('instruction');
 		$this->xml->writeAttribute('order',$line['insOrder']);
 		$this->xml->writeAttribute('opcode',strtoupper($line[0]));
 
-
-
 		if (array_key_exists('arg1', $line)) {
 			$this->genAttribute('arg1',$line['arg1']);
 			if (array_key_exists('arg2', $line)) {
 				$this->genAttribute('arg2',$line['arg2']);
 				if (array_key_exists('arg3', $line)) {
-					$this->genAttribute('arg3',$line['arg1']);				
+					$this->genAttribute('arg3',$line['arg3']);				
 				}	
 			}	
 		}
@@ -165,14 +159,14 @@ class XMLGen{
  *	spracovavanych instrukci.
  **/
 class Parser{
-	private $stats;//odkaz na triedu statistiky
-	private $line; //aktualne spracovavany riadok
-	private $lineNmr;
-	private $insOrder;
-	private $argOrder;
+	private $stats;		/* odkaz na triedu statistiky */
+	private $line; 		/* aktualne spracovavany riadok */
+	private $lineNmr;	/* referencia na aktualny riadok pre vypis chybovych hlasok */
+	private $insOrder;	/* aktualne spracovavana instrukcia */
+	private $argOrder;	/* poradie argumentu aktualne spracovavanej intrukcie */
 
 	/**
-	 *	Konstruktor triedz Parser
+	 *	Konstruktor triedy Parser
 	 */
 	public function __construct($stats){
 		$this->stats = $stats;
@@ -182,7 +176,11 @@ class Parser{
 	}
 
 	/**
-	 *
+	 *	Telo syntaktickej a lexikálnej analýzy.
+	 *	Funckia načíta štandardný vstup po riadkoch
+	 *	a upravuje ju do formatu, pre jednoduchsie spracovanie analyzerom
+	 *	return:	funkcia vrati hodnotu null v pripade ze sa vyskytne prazdny riadok
+	 *			inak vrati analyzovany a upraveny riadok nacitany zo STDIN
 	 */
 	public function parse(){
 		if(feof(STDIN)){
@@ -203,7 +201,7 @@ class Parser{
 
 		$this->removeComments();
 		$this->line = trim($this->line);
-		$this->removeEmptyLine();
+		// $this->removeEmptyLine();
 
 		if(strlen($this->line) == 0){
 			return null;
@@ -214,6 +212,7 @@ class Parser{
 				terminateScript("Missing or incorrect code header.",ERR_MISSING_FILE_HEADER);
 			}
 			else{
+				// zvysi hodnotu insOrder na 1 a pouzije ju pri kontrole prvej instrukcie
 				$this->insOrder++;
 				return null;
 			}
@@ -229,12 +228,13 @@ class Parser{
 		$this->analyzer();
 
 		$this->insOrder++;
-		$this->stats->incCount('loc');
+		$this->stats->incLoc();
 		return $this->line;
 	}
 
 	/**
-	 *
+	 *	Funkcia analyzator stavovým riadneím vykonáva kontrolu
+	 *	Vykonava lexikalnu kontrolu instrukcii a kontrolu poctu jej parametrov
 	 */
 	private function analyzer(){
 		if($this->line['argCount'] < 0 || $this->line['argCount'] > 3){
@@ -258,11 +258,11 @@ class Parser{
 
 			// OPCODE <label>
 			case 'JUMP':
-				$this->stats->incCount('jumps');
+				$this->stats->incJumps();
 			case 'CALL':
 			case 'LABEL':
 				if($this->line['argCount'] == 1){
-					return $this->checkLabel($this->line[1]);
+					return $this->checkLabel($this->line[1],$this->line[0]);
 				}
 				else{
 					terminateScript("Err line $this->lineNmr, Invalid arg count",ERR_LEX_SYNT);
@@ -291,8 +291,7 @@ class Parser{
 				}
 				else{
 					terminateScript("Err line $this->lineNmr, Invalid arg count",ERR_LEX_SYNT);
-				}
-								
+				}				
 				break;
 
 			// OPCODE <var> <symb>
@@ -345,8 +344,8 @@ class Parser{
 			case 'JUMPIFEQ':
 			case 'JUMPIFNEQ':
 				if($this->line['argCount'] == 3){
-					if($this->checkLabel($this->line[1]) && $this->checkSymb($this->line[2]) && $this->checkSymb($this->line[3])){
-						$this->stats->incCount('jumps');
+					if($this->checkLabel($this->line[1],$this->line[0]) && $this->checkSymb($this->line[2]) && $this->checkSymb($this->line[3])){
+						$this->stats->incJumps();
 						return true;
 					}
 				}
@@ -366,21 +365,24 @@ class Parser{
 	 */
 	private function removeComments(){
 		if(strpos($this->line, '#') !== false){
-			$this->stats->incCount('comments');
+			$this->stats->incComments();
 			$arr = explode('#',$this->line);
 			$this->line = $arr[0];
 		}
 	}
 
 	/**
-	 *
+	 *	Funkcia na ostranenie prazdnych riadkov
+	 *	nefunguje ocakavane
 	 */
 	private function removeEmptyLine(){
-		$this->line = preg_replace('/^[ \t]*[\r\n]+/m', '', $this->line);
+		$this->line = preg_replace('/^[ \t]*[\r\n]+/m', null, $this->line);
 	}
 
 	/**
-	 *
+	 *	Kontrola premennych.
+	 *	Ak je kontrolovany retazec spravny, pripravi hodnoty na gen. XML kodu
+	 *	return: hodnota true ak je retazec spravny
 	 */
 	private function checkVar($var){
 		if (preg_match('/^(LF|TF|GF)@(_|-|\$|&|%|\*|!|\?|[a-zA-Z])(_|-|\$|&|%|\*|!|\?|[a-zA-Z0-9])*$/', $var)) {
@@ -397,10 +399,15 @@ class Parser{
 	}
 
 	/**
-	 *
+	 *	Kontrola type.
+	 *	Ak je kontrolovany retazec spravny, pripravi hodnoty na gen. XML kodu
+	 *	return: hodnota true ak je retazec spravny
 	 */
 	private function checkType($type){
 		if (preg_match('/^(int|bool|string|nil)$/', $type)) {
+			if ($type == 'bool'){
+				$type = strtolower($type);
+			}
         	$this->line[ "arg".$this->argOrder] = array(
         		"type" => "type",
         		"text" => $type
@@ -414,11 +421,15 @@ class Parser{
 	}
 
 	/**
-	 *
+	 *	Kontrola navesti.
+	 *	Ak je kontrolovany retazec spravny, pripravi hodnoty na gen. XML kodu
+	 *	return: hodnota true ak je retazec spravny
 	 */
-	private function checkLabel($label){		
+	private function checkLabel($label,$instruction){		
 		if (preg_match('/^(_|-|\$|&|%|\*|!|\?|[a-zA-Z])(_|-|\$|&|%|\*|!|\?|[a-zA-Z0-9])*$/', $label)){
-			$this->stats->incCount('labels');
+			if(strcmp(strtoupper($instruction), 'LABEL')){
+				$this->stats->incLabels();
+			}
         	$this->line[ "arg".$this->argOrder] = array(
         		"type" => "label",
         		"text" => $label
@@ -432,7 +443,9 @@ class Parser{
 	}
 
 	/**
-	 *
+	 *	Kontrola symbolov.
+	 *	Ak je kontrolovany retazec spravny, pripravi hodnoty na gen. XML kodu
+	 *	return: hodnota true ak je retazec spravny
 	 */
 	private function checkSymb($symb){
         if (preg_match('/^(int|bool|string|nil)@.*$/', $symb)) {
@@ -442,35 +455,35 @@ class Parser{
                     terminateScript("Err line $this->lineNmr, int value is undefined",ERR_LEX_SYNT);
                 }
                 else {
-                	$this->line[ "arg".$this->argOrder] = array(
+                	$this->line["arg".$this->argOrder] = array(
                 		"type" => "int",
                 		"text" => $symb[1]
                 	);
                 	$this->argOrder++;
-
                     return true;
                 }
             }
             elseif ($symb[0] == "bool") { // bool
-                //$symb[1] = strtolower($symb[1]);
-                if (preg_match('/^(true|false)$/', $symb[1])) {                	
-                	$this->line[ "arg".$this->argOrder] = array(
+                //$symb[1] = strtolower($symb[1]);         
+                if ($symb[1] == "") {
+                    terminateScript("Err line $this->lineNmr, bool value is undefined",ERR_LEX_SYNT);
+                }
+                elseif (preg_match('/^(true|false)$/', $symb[1])) {                	
+                	$this->line["arg".$this->argOrder] = array(
                 		"type" => "bool",
                 		"text" => $symb[1]
                 	);
                 	$this->argOrder++;
-
-
                     return true;
                 }
                 else{
-                    terminateScript("Err line $this->lineNmr,". $symb[1] ."is not a valid symbol",ERR_LEX_SYNT);
+                    terminateScript("Err line $this->lineNmr,". $symb[1] ." is not a valid boolean",ERR_LEX_SYNT);
                 }
             }
             else { // string
             	//whitespaces and comments are removed, need to match only string withou \ 
                 if (preg_match('/^(\\\\[0-9]{3}|[^\\\\])*$/', $symb[1])) { // TODO ????
-                	$this->line[ "arg".$this->argOrder] = array(
+                	$this->line["arg".$this->argOrder] = array(
                 		"type" => "string",
                 		"text" => $symb[1]
                 	);
@@ -492,66 +505,93 @@ class Parser{
 	}
 }
 
-
 /**
  *
  */
 class Statistics{
-	private $outputFile = FALSE;//file to store stats
+	public $outputStats;/* stat to write */
+	private $outputFile;/* file to store stats */
 
-	private $comments = FALSE;	//comments
-	private $loc = FALSE;		//instructions
-	private $labels = FALSE;	//labels
-	private $jumps = FALSE;		//jumps
+	private $comments;	/* comments */
+	private $loc;		/* instructions */
+	private $labels;	/* labels */
+	private $jumps;		/* jumps */
 
+	/**
+	 *	Konstruktor triedy Statistics
+	 */
+	public function __construct(){
+		$this->comments = 0;	
+		$this->loc = 0;		
+		$this->labels = 0;		
+		$this->jumps = 0;	
+		$this->outputStats = [];	
+	}
+
+	/**
+	 *	Setter nazvu suboru pre vypis statistik
+	 */ 
 	public function setFileName($name){
 		$this->outputFile = $name;
 	}
 
-	public function setComments($number){
-		$this->comments = $number;
+	/**
+	 *	Inkrementor komentarov
+	 */
+	public function incComments(){
+		$this->comments++;
 	}
 
-	public function setLoc($number){
-		$this->loc = $number;
+	/**
+	 *	Inkrementor instrukci
+	 */
+	public function incLoc(){
+		$this->loc++;
 	}
 
-	public function setLabels($number){
-		$this->labels = $number;
+	/**
+	 *	Inkrementor navesti
+	 */
+	public function incLabels(){
+		$this->labels++;
 	}
 
-	public function setJumps($number){
-		$this->jumps = $number;
+	/**
+	 *	Inkrementor skokov
+	 */
+	public function incJumps(){
+		$this->jumps++;
 	}
 
-	public function incCount($type){
-		switch ($type) {
-			case 'comments':
-				$this->comments++;
-				break;
-			case 'loc':
-				$this->loc++;
-				break;
-			case 'labels':
-				$this->labels++;
-				break;
-			case 'jumps':
-				$this->jumps++;
-				break;
+	/**
+	 *	Funkcia vypise statistiky zdrojoveho suboru
+	 */
+	public function writeStats(){
+		if($this->outputFile){
+			$file = fopen($this->outputFile, "w") or terminateScript("Err using outputFile\n",ERR_USING_OUTPUT_FILE);
+
+			foreach ($this->outputStats as $value) {
+				switch ($value) {
+					case '--comments':
+						fwrite($file, "$this->comments\n");
+						break;
+					case '--loc':
+						fwrite($file, "$this->loc\n");
+						break;
+					case '--labels':
+						fwrite($file, "$this->labels\n");
+						break;
+					case '--jumps':
+						fwrite($file, "$this->jumps\n");
+						break;
+					
+					default:
+						break;
+				} 
+			}
+			fclose($file);
 		}
 	}
 
-	public function printVals(){
-		if($this->comments)
-			echo 'comments '.--$this->comments.''.PHP_EOL;
-		if($this->loc)
-			echo 'loc '.--$this->loc.''.PHP_EOL;
-		if($this->labels)
-			echo 'labels '.--$this->labels.''.PHP_EOL;
-		if($this->jumps)
-			echo 'jumps '.--$this->jumps.''.PHP_EOL;
-		if($this->outputFile)
-			echo "fileName $this->outputFile\n";
-	}
 }
 ?>
