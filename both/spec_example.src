@@ -6,7 +6,9 @@ LABEL while
 JUMPIFEQ end GF@counter string@aaa
 WRITE string@Proměnná\032GF@counter\032obsahuje\032
 WRITE GF@counter
-WRITE string@\010
+WRITE string@\011
 CONCAT GF@counter GF@counter string@a
 JUMP while
 LABEL end
+LABEL end
+JUMp while

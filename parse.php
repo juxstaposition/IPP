@@ -15,6 +15,8 @@ define("ERR_MISSING_FILE_HEADER", 21);
 define("ERR_WRONG_OP_CODE", 22);
 define("ERR_LEX_SYNT", 23);
 
+ini_set('display_errors', 'stderr');
+
 $stats = new Statistics();
 
 checkArgs($stats);
@@ -34,7 +36,7 @@ while (($parsedLine = $parser->parse()) !== FALSE) {
 $generator->XMLEnd();
 $stats->writeStats();
 
-return 0;
+exit(0);
 
 
 /**
@@ -240,8 +242,8 @@ class Parser{
 		if($this->line['argCount'] < 0 || $this->line['argCount'] > 3){
 			terminateScript("Err line $this->lineNmr, Wrong count of operands",ERR_LEX_SYNT);
 		}
-		strtoupper($this->line[0]);
-
+		$this->line[0] = strtoupper($this->line[0]);
+		
 		switch ($this->line[0]) {
 			// OPCODE	
 			case 'CREATEFRAME':
@@ -258,7 +260,7 @@ class Parser{
 
 			// OPCODE <label>
 			case 'JUMP':
-				$this->stats->incJumps();
+				$this->stats->incJumps($this->line[1]);
 			case 'CALL':
 			case 'LABEL':
 				if($this->line['argCount'] == 1){
@@ -345,7 +347,7 @@ class Parser{
 			case 'JUMPIFNEQ':
 				if($this->line['argCount'] == 3){
 					if($this->checkLabel($this->line[1],$this->line[0]) && $this->checkSymb($this->line[2]) && $this->checkSymb($this->line[3])){
-						$this->stats->incJumps();
+						$this->stats->incJumps($this->line[1]);
 						return true;
 					}
 				}
@@ -385,12 +387,12 @@ class Parser{
 	 *	return: hodnota true ak je retazec spravny
 	 */
 	private function checkVar($var){
-		if (preg_match('/^(LF|TF|GF)@(_|-|\$|&|%|\*|!|\?|[a-zA-Z])(_|-|\$|&|%|\*|!|\?|[a-zA-Z0-9])*$/', $var)) {
-        	$this->line[ "arg".$this->argOrder] = array(
-        		"type" => "var",
-        		"text" => $var
-        	);
-        	$this->argOrder++;
+		if (preg_match('/^(LF|TF|GF)@(_|-|&|%|!|\?|\$|\*|[a-zA-Z])(_|-|&|%|!|\$|\?|\*|[a-zA-Z0-9])*$/', $var)) {
+			$this->line[ "arg".$this->argOrder] = array(
+				"type" => "var",
+				"text" => $var
+			);
+			$this->argOrder++;
 			return true;
 		}
 		else{
@@ -408,11 +410,11 @@ class Parser{
 			if ($type == 'bool'){
 				$type = strtolower($type);
 			}
-        	$this->line[ "arg".$this->argOrder] = array(
-        		"type" => "type",
-        		"text" => $type
-        	);
-        	$this->argOrder++;
+			$this->line[ "arg".$this->argOrder] = array(
+				"type" => "type",
+				"text" => $type
+			);
+			$this->argOrder++;
 			return true;
 		}
 		else{
@@ -428,13 +430,13 @@ class Parser{
 	private function checkLabel($label,$instruction){		
 		if (preg_match('/^(_|-|\$|&|%|\*|!|\?|[a-zA-Z])(_|-|\$|&|%|\*|!|\?|[a-zA-Z0-9])*$/', $label)){
 			if(strcmp(strtoupper($instruction), 'LABEL')){
-				$this->stats->incLabels();
+				$this->stats->incLabels($label);
 			}
-        	$this->line[ "arg".$this->argOrder] = array(
-        		"type" => "label",
-        		"text" => $label
-        	);
-        	$this->argOrder++;
+			$this->line[ "arg".$this->argOrder] = array(
+				"type" => "label",
+				"text" => $label
+			);
+			$this->argOrder++;
 			return true;
 		}
 		else{
@@ -448,57 +450,58 @@ class Parser{
 	 *	return: hodnota true ak je retazec spravny
 	 */
 	private function checkSymb($symb){
-        if (preg_match('/^(int|bool|string|nil)@.*$/', $symb)) {
-            $symb = explode('@', $symb, 2);
-            if ($symb[0] == "int") { // int
-                if ($symb[1] == "") {
-                    terminateScript("Err line $this->lineNmr, int value is undefined",ERR_LEX_SYNT);
-                }
-                else {
-                	$this->line["arg".$this->argOrder] = array(
-                		"type" => "int",
-                		"text" => $symb[1]
-                	);
-                	$this->argOrder++;
-                    return true;
-                }
-            }
-            elseif ($symb[0] == "bool") { // bool
-                //$symb[1] = strtolower($symb[1]);         
-                if ($symb[1] == "") {
-                    terminateScript("Err line $this->lineNmr, bool value is undefined",ERR_LEX_SYNT);
-                }
-                elseif (preg_match('/^(true|false)$/', $symb[1])) {                	
-                	$this->line["arg".$this->argOrder] = array(
-                		"type" => "bool",
-                		"text" => $symb[1]
-                	);
-                	$this->argOrder++;
-                    return true;
-                }
-                else{
-                    terminateScript("Err line $this->lineNmr,". $symb[1] ." is not a valid boolean",ERR_LEX_SYNT);
-                }
-            }
-            else { // string
-            	//whitespaces and comments are removed, need to match only string withou \ 
-                if (preg_match('/^(\\\\[0-9]{3}|[^\\\\])*$/', $symb[1])) { // TODO ????
-                	$this->line["arg".$this->argOrder] = array(
-                		"type" => "string",
-                		"text" => $symb[1]
-                	);
-                	$this->argOrder++;
-                    return true;
-                }
-                else{
-                    terminateScript("Err line $this->lineNmr,". $symb[1] ." is not a valid symbol",ERR_LEX_SYNT);
-                }
-            }
-        }
-        elseif (preg_match('/^(LF|TF|GF)@.*$/', $symb)) { // var
-            $this->checkVar($symb);
-            return true;
-        }
+		if (preg_match('/^(int|bool|string|nil)@.*$/', $symb)) {
+			$symb = explode('@', $symb, 2);
+			if ($symb[0] == "int") { // int
+				if ($symb[1] == "") {
+					terminateScript("Err line $this->lineNmr, int value is undefined",ERR_LEX_SYNT);
+				}
+				// hodnota ciselnoho retazca sa netestuje, mozem priamo pridat
+				else {
+					$this->line["arg".$this->argOrder] = array(
+						"type" => "int",
+						"text" => $symb[1]
+					);
+					$this->argOrder++;
+					return true;
+				}
+			}
+			elseif ($symb[0] == "bool") { // bool      
+				if ($symb[1] == "") {
+					terminateScript("Err line $this->lineNmr, bool value is undefined",ERR_LEX_SYNT);
+				}
+				elseif (preg_match('/^(true|false)$/', $symb[1])) {                	
+					$this->line["arg".$this->argOrder] = array(
+						"type" => "bool",
+						"text" => $symb[1]
+					);
+					$this->argOrder++;
+					return true;
+				}
+				else{
+					terminateScript("Err line $this->lineNmr,". $symb[1] ." is not a valid boolean",ERR_LEX_SYNT);
+				}
+			}
+			else { // string
+				// biele znaky a komentare su uz odstranene, prijmam vsetky znaky rozne od \
+				// aleb \ nasledovane 3x cislom
+				if (preg_match('/^(\\\\[0-9]{3}|[^\\\\])*$/', $symb[1])) {
+					$this->line["arg".$this->argOrder] = array(
+						"type" => "string",
+						"text" => $symb[1]
+					);
+					$this->argOrder++;
+					return true;
+				}
+				else{
+					terminateScript("Err line $this->lineNmr,". $symb[1] ." is not a valid symbol",ERR_LEX_SYNT);
+				}
+			}
+		}
+		elseif (preg_match('/^(LF|TF|GF)@.*$/', $symb)) { // var
+			$this->checkVar($symb);
+			return true;
+		}
 		else{
 			terminateScript("Err line $this->lineNmr, $symb is not a symbol", ERR_LEX_SYNT);
 		}	
@@ -506,7 +509,7 @@ class Parser{
 }
 
 /**
- *
+ *	Trieda pouzivana na ziskavanie statistik zdrojoveho kodu
  */
 class Statistics{
 	public $outputStats;/* stat to write */
@@ -514,8 +517,9 @@ class Statistics{
 
 	private $comments;	/* comments */
 	private $loc;		/* instructions */
-	private $labels;	/* labels */
 	private $jumps;		/* jumps */
+	private $labels;	/* labels */
+	private $labelNames;/* pole pouzivanych labels */
 
 	/**
 	 *	Konstruktor triedy Statistics
@@ -526,6 +530,7 @@ class Statistics{
 		$this->labels = 0;		
 		$this->jumps = 0;	
 		$this->outputStats = [];	
+		$this->labelNames = [];	
 	}
 
 	/**
@@ -552,14 +557,20 @@ class Statistics{
 	/**
 	 *	Inkrementor navesti
 	 */
-	public function incLabels(){
-		$this->labels++;
+	public function incLabels($label){
+		if(!in_array($label, $this->labelNames)){
+			array_push($this->labelNames, $label);
+			$this->labels++;
+		}
 	}
 
 	/**
 	 *	Inkrementor skokov
 	 */
-	public function incJumps(){
+	public function incJumps($ins){
+		if(!in_array($ins, $this->labelNames)){
+			$this->incLabels($ins);
+		}
 		$this->jumps++;
 	}
 
