@@ -4,8 +4,8 @@
 /**
  *	Súbor:	test.php
  *	Autor:	Daniel Miloslav Očenáš (login:xocena06)
- *	Dátum:	Marec 2020
- *	Popis:	Projekt 1 predmetu IPP, VUT FIT 2020.
+ *	Dátum:	Apr9l 2020
+ *	Popis:	Projekt 2 predmetu IPP, VUT FIT 2020.
  */
 
 define("ERR_INV_SCRIPT_PARAM", 10);
@@ -13,7 +13,9 @@ define("ERR_USING_INPUT_FILE", 11);
 define("ERR_USING_OUTPUT_FILE", 12);
 
 $test = new Test();
+
 checkArgs($test);
+
 $test->makeTests();
 
 exit(0);
@@ -36,8 +38,8 @@ function testFileParam($param,$opts,$test){
 		$opts[$param] = explode(' ',$opts[$param]);
 	}
 	foreach ($opts[$param] as $key) {
-		var_dump($key);
-		var_dump(gettype($opts[$param]));
+		// var_dump($key);
+		// var_dump(gettype($opts[$param]));
 		if ($param != 'directory' && is_file($key)) {
 			$test->scripts[$param] = $key;
 		}
@@ -76,7 +78,7 @@ function checkArgs($test){
 			}
 		}
 		$opts = getopt("",["directory::","recursive","parse-script::","int-script::","parse-only","int-only","jexamxml::","help"]);
-
+		
 		if(array_key_exists("help", $opts) && $argc == 2){
 			fwrite(STDOUT, "\nNápoveda\nSúbor:test.php\nAutor:Daniel Miloslav Očenáš (xocena06)\n\nTento skript vykonáva testy vstupných a výstupných súborov pre skripty parse.php a interpret.py\nnachádzajúcich sa v aktuálnom priečinku\nAko výstup vytvorí HTML stránku pre prehľad výsledku testov\n\nPovolene parametre:\n--help: vypíše nápovedu\n--directory: vykona testy vo zvolenom priecinku\n--recursive: vykoná rekurzívne testy aktuálneho priečinka\n(--parse-script|--int-script)=filename: špecifikovanie súboru parseru a interpretu\n    nesmie sa kombinovať s opačným parametrom --xxx-only a --xxx-script\n--jexamxml=file: súbor s JAR balíčkom s nástrojom A7Soft JExamXML\n--parse-only: testovaný iba skript parse.php\n--int-only: testoavný iba skript interpret.py \n");
 			exit(0);
@@ -121,10 +123,12 @@ function checkArgs($test){
 			$test->testDir = [];
 			testFileParam('directory',$opts,$test);
 		}
+
 		if (array_key_exists("int-script", $opts)){
 			unset($test->scripts['int-script']);
 			testFileParam('int-script',$opts,$test);
 		}
+		
 		if (array_key_exists("parse-script", $opts)){
 			unset($test->scripts['parse-script']);
 			testFileParam('parse-script',$opts,$test);			
@@ -154,16 +158,65 @@ class Test{
 	}
 
 	public function makeTests(){
+		echo "Make tests Test Dir:";
 		var_dump($this->testDir);
 		var_dump($this->scripts);
-		foreach ($this->scripts as $key) {
-			if(is_array($key)){
-				foreach ($key as $key1 ) {
-					if (!is_file($key1)){
-						echo "file $key not found\n";
-					}	
-				}	
+		var_dump($this->recursive);
+		
+		$dirIterator ;
+		if($this->recursive){
+			$directory = new RecursiveDirectoryIterator($this->testDir[0], RecursiveDirectoryIterator::SKIP_DOTS);
+			$dirIterator = new RecursiveIteratorIterator($directory);
+		}
+		else{
+			$dirIterator = new DirectoryIterator($this->testDir[0]);
+		}
+		
+		$srcFiles = [];
+		foreach ($dirIterator as $iterator){
+			// var_dump($iterator->getPath()); 
+			// var_dump($iterator->getPathname());
+			if(strcmp($iterator->getExtension(),'src') == 0){
+				$srcFile = array(
+					"name" => $iterator->getBasename('.src'),
+					"path" => $iterator->getPath(),
+				);
+				array_push($srcFiles, $srcFile);
 			}
+		}
+		var_dump($srcFiles);	
+		foreach($srcFiles as $srcFile){
+
+			$files = $this->openFiles($srcFile['name'],$srcFile['path']);
+			$this->closeFiles($files);
+			var_dump(is_file($srcFile['path'].'/'.$srcFile['name'].'.rc'));
+		}
+
+	}
+	
+	private function openFiles($filename,$path){
+		$rcExists = false;
+		
+		if( is_file($path.'/'.$filename.'.rc') ){
+			$rcExists = true;
+		}
+		
+		$files = array(
+			'src' => fopen($filename.'src', "w+") ,
+			'rc' =>fopen($filename.'rc', "w+"),
+			'in' =>fopen($filename.'in', "w+"),
+			'out' =>fopen($filename.'out', "w+"),
+		);
+
+		if(!$rcExists){
+			fwrite($files['rc'],0);
+		}
+		return $files;
+	}
+
+	private function closeFiles($files){
+		foreach($files as $file){
+			fclose($file);
 		}
 	}
 }
