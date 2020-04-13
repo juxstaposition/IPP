@@ -55,8 +55,8 @@ class Interpret:
 		"""
 		
 		self.checkXMLRoot(self.xml)
-		self.FRAME.printFrames()
 
+		self.FRAME.printFrames()
 		
 		self.xml = self.xml.findall("./")
 
@@ -190,7 +190,7 @@ class Instruction:
 		
 
 	def insIdentifyExecute(self):
-		opCode = self.instruction.attrib['opcode']
+		opCode = self.instruction.attrib['opcode'].upper()
 
 		# Tvar Instrukcie: OPCODE
 		# Instrukcia CREATEFRAME
@@ -237,7 +237,11 @@ class Instruction:
 		elif (opCode == 'PUSHS'):
 			args = self.checkArgsCount(1)
 
+			arg1 = Symb(args[0]['type'], args[0]['value'])
+			arg1Value = arg1.checkSymb(self.FRAME)
 
+			debugPrint('PUSH:',end='')
+			debugPrint(arg1Value)
 
 		# Instrukcia Write
 		elif (opCode == 'WRITE'):
@@ -292,10 +296,10 @@ class Instruction:
 			arg1 = Var(args[0]['type'], args[0]['value'])
 			arg1.checkVar()
 
-			varValue = 	self.FRAME.dataStack.pop()
+			varValue = self.FRAME.dataStack.pop()
 		
 		# Tvar Instrukcie: OPCODE <var> <symb>
-
+ 
 		# TODO Instrukcia MOVE
 		elif (opCode == 'MOVE'):
 			args = self.checkArgsCount(2)
