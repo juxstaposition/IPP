@@ -52,10 +52,10 @@ function testFileParam($param,$opts,$test){
 		else{
 			$msg = '';
 			if($param == 'directory' ){
-				$msg = "'$key' v parametri $param nie je platny priecinok\n";
+				$msg = "Priečinok '$key' v parametri $param neexistuje\n";
 			}
 			else{
-				$msg = "'$key' v parametri $param nie je platny subor\n";
+				$msg = "Súbor '$key' v parametri $param neexistuje\n";
 			}
 			terminateScript($msg,ERR_USING_INPUT_FILE);
 		}
@@ -78,7 +78,7 @@ function checkArgs($test){
 		$optsArray = array('--recursive','--directory','--parse-script','--int-script','--parse-only','--int-only','--jexamxml','--help',"test.php");
 		foreach ($argv as $key) {
 			if(!((strpos($key, '--parse-script') !== false ) ||(strpos($key, '--directory') !== false ) || (strpos($key, '--int-script') !== false ) || in_array($key,$optsArray))){
-				terminateScript("$key nepodporovany parameter skriptu (pre viac info pouzi parameter --help)\n", ERR_INV_SCRIPT_PARAM);
+				terminateScript("$key nepodporovaný parameter skriptu (pre viac info použi parameter --help)\n", ERR_INV_SCRIPT_PARAM);
 			}
 		}
 		$opts = getopt("",["directory::","recursive","parse-script::","int-script::","parse-only","int-only","jexamxml::","help"]);
@@ -88,7 +88,7 @@ function checkArgs($test){
 			exit(0);
 		}
 		else if(array_key_exists("help", $opts) && $argc > 2){
-			terminateScript("Parameter --help musi byt pouzity samostatne");
+			terminateScript("Parameter --help musí byť použitý samostatne");
 		}
 		
 		if(array_key_exists("recursive", $opts)){
@@ -114,11 +114,11 @@ function checkArgs($test){
 		}
 		// nespravna kombinacia int only - ukonci
 		else if (array_key_exists("int-only", $opts) && (array_key_exists("parse-only", $opts) || array_key_exists("parse-script", $opts)) ){
-			terminateScript("$key nepodporovana kombinacia parametrov skriptu (pre viac info pouzi parameter --help)\n", ERR_INV_SCRIPT_PARAM);	
+			terminateScript("$key nepodporovaná kombinácia parametrov skriptu (pre viac info pouzi parameter --help)\n", ERR_INV_SCRIPT_PARAM);	
 		}
 		// nespravna kombinacia parse only - ukonci
 		else if (array_key_exists("parse-only", $opts) && (array_key_exists("int-only", $opts) || array_key_exists("int-script", $opts)) ){
-			terminateScript("$key nepodporovana kombinacia parametrov skriptu (pre viac info pouzi parameter --help)\n", ERR_INV_SCRIPT_PARAM);		
+			terminateScript("$key nepodporovaná kombinácia parametrov skriptu (pre viac info pouzi parameter --help)\n", ERR_INV_SCRIPT_PARAM);		
 		}
 
 		// potreba testovania, ci bolo zadanych viac parametrov directory, int-script, parse-script
@@ -138,7 +138,7 @@ function checkArgs($test){
 
 		return true;
 	}
-	terminateScript("Nespravna kombinacia parametrov skriptu\n",ERR_INV_SCRIPT_PARAM);		
+	terminateScript("Nesprávna kombinácia parametrov skriptu\n",ERR_INV_SCRIPT_PARAM);		
 }
 
 /**
@@ -230,9 +230,9 @@ class Test{
 								
 								
 								if ( $xmlRetCode == 0){								
-									$this->addTestResult($srcFullPath,'','vystup sa zhoduje s referencnym',$expectedResults['rc'],$parseReturnCode,true, 'TEST OK');
+									$this->addTestResult($srcFullPath,'','Výstup sa zhoduje s referenčnym',$expectedResults['rc'],$parseReturnCode,true, 'TEST OK');
 								}else{
-									$this->addTestResult($srcFullPath,$xmlOutput,'vystup sa nezhoduje s referencnym',$expectedResults['rc'],$parseReturnCode,false, 'Vystup testu sa nezhoduje s referencnym');
+									$this->addTestResult($srcFullPath,$xmlOutput,'Výstup sa nezhoduje s referenčným',$expectedResults['rc'],$parseReturnCode,false, 'Výstup testu sa nezhoduje s referenčným');
 								}
 							}
 							// vykonanie parse aj interpret testu
@@ -245,10 +245,10 @@ class Test{
 						else{
 							// porovnanie ocakavaneho kodu a navratoveho kodu parsru a zapisanie statistik
 							if(intval($expectedResults['rc']) == $parseReturnCode){
-								$this->addTestResult($srcFullPath,'','Chybove navratove kody sa zhoduju',$expectedResults['rc'],$parseReturnCode,true, 'TEST OK');
+								$this->addTestResult($srcFullPath,'','Chybové návratové kódy sa zhodujú',$expectedResults['rc'],$parseReturnCode,true, 'TEST OK');
 							}
 							else{
-								$this->addTestResult($srcFullPath,'',$parseOutput,$expectedResults['rc'],$parseReturnCode,false,'Navratovy kod sa nezhoduje s referencnym');
+								$this->addTestResult($srcFullPath,'',$parseOutput,$expectedResults['rc'],$parseReturnCode,false,'Návratovy kód sa nezhoduje s referenčným');
 							}
 						}
 					}
@@ -284,16 +284,16 @@ class Test{
 				if($diffReturnCode == 0 ){
 					$this->addTestResult("$srcName.src",$expectedResults['out'],$intOutput,$expectedResults['rc'],$intReturnCode,true,'TEST OK');
 				}else{
-					$this->addTestResult("$srcName.src",$expectedResults['out'],$intOutput,$expectedResults['rc'],$intReturnCode,false,'Vystup testu sa nezhoduje s referencnym');
+					$this->addTestResult("$srcName.src",$expectedResults['out'],$intOutput,$expectedResults['rc'],$intReturnCode,false,'Výstup testu sa nezhoduje s referenčným');
 				}
 			}else{
 				if($intReturnCode == intval($expectedResults['rc']) ){
-					$this->addTestResult("$srcName.src",'','Chybove navratove kody sa zhoduju',$expectedResults['rc'],$intReturnCode,true,'TEST OK');
+					$this->addTestResult("$srcName.src",'','Chybové návratové kódy sa zhodujú',$expectedResults['rc'],$intReturnCode,true,'TEST OK');
 				}else{
 					if(intval($expectedResults['rc']) == 0){
-						$this->addTestResult("$srcName.src",$expectedResults['out'],$intOutput,$expectedResults['rc'],$intReturnCode,false,'Navratovy kod sa nezhoduje s referencnym');
+						$this->addTestResult("$srcName.src",$expectedResults['out'],$intOutput,$expectedResults['rc'],$intReturnCode,false,'Návratovy kod sa nezhoduje s referenčným');
 					}else{
-						$this->addTestResult("$srcName.src",'',$intOutput,$expectedResults['rc'],$intReturnCode,false,'Navratovy kod sa nezhoduje s referencnym');
+						$this->addTestResult("$srcName.src",'',$intOutput,$expectedResults['rc'],$intReturnCode,false,'Návratový kód sa nezhoduje s referenčným');
 					}
 				}
 			}
@@ -345,11 +345,11 @@ class Test{
 			if( is_file($path.'/'.$filename.'.'.$extension) ){
 				$files[$extension] = file_get_contents($path.'/'.$filename.'.'.$extension);
 				if( $files[$extension] === false){
-					terminateScript('Problem s pouzitim vstupneho suboeru',ERR_USING_INPUT_FILE);
+					terminateScript('Problém s použitím vstupného súboru',ERR_USING_INPUT_FILE);
 				}
 			}else{
 				$file = fopen($path.'/'.$filename.'.'.$extension, "w+")
-					or terminateScript('Problem s pouzitim vstupneho suboeru',ERR_USING_INPUT_FILE);
+					or terminateScript('Problém s použitím vstupného súboru',ERR_USING_INPUT_FILE);
 				if(strcmp($extension,'rc') == 0){
 					$files[$extension] = '0';
 					fwrite($file,0);
@@ -380,7 +380,7 @@ foreach($results as $test){
 ?>	
 <!doctype html>
 	<head>
-		<title>Projekt IPP - vysledky testov, xocena06</title>
+		<title>Projekt IPP - výsledky testov, xocena06</title>
 		<meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
 	</head>
 
@@ -388,24 +388,24 @@ foreach($results as $test){
 		<header style="background: #262626; padding: 10px; margin: 10px; width: fit-content; 
 						display: inline-block; border-radius: 10px; box-shadow: 5px 5px 10px 4px rgba(26,26,26,1); ">
 			<div >
-				<h1>Vysledky testov IPPCode</h1>
-				<h2>Tato stranka bola vygenerovana skriptom test.php</h2>
-				<p>Autor: Daniel Miloslav Ocenas</p>
+				<h1>Výsledky testov IPPCode</h1>
+				<h2>Táto stránka bola vygenerovaná skriptom test.php</h2>
+				<p>Autor: Daniel Miloslav Očenáš</p>
 				<p>login: xocena06</p>	
 			</div>
 		</header>
 		<div>
 			<table style="margin: 0 auto; background: #262626; text-align:left; border-radius: 10px; padding: 5px; box-shadow: 5px 5px 10px 4px rgba(26,26,26,1);" >
 				<tr>
-					<td>Pocet testov:</td>
+					<td>Počet testov:</td>
 					<td><?php echo count($results); ?></td>
 				</tr>
 				<tr style="color: green">
-					<td>Pocet uspesnych testov</td>
+					<td>Počet úspešných testov</td>
 					<td><?php echo $successFull; ?></td>
 				</tr>
 				<tr style="color: red">
-					<td>Pocet neuspesnych testov:</td>
+					<td>Počet neúspešných testov:</td>
 					<td><?php echo count($results) - $successFull; ?></td>
 				</tr>
 			</table>
@@ -414,19 +414,19 @@ foreach($results as $test){
 		<table style="margin: 0 auto; " >
 			<tr>
 				<th style="border-bottom: 1px solid #1a1a1a; padding: 3px 5px;">
-					Nazov suboru .src		
+					Názov suboru .src		
 				</th>
 				<th style="border-bottom: 1px solid #1a1a1a; padding: 3px 5px;">
-					Ocakavany vystup testu
+					Očakávaný výstup testu
 				</th>
 				<th style="border-bottom: 1px solid #1a1a1a; padding: 3px 5px;">
-					Vystup testu
+					Výstup testu
 				</th>
 				<th style="border-bottom: 1px solid #1a1a1a; padding: 3px 15px;">
-					Ocakavany navratovy kod				
+					Očakávaný návratový kód				
 				</th>
 				<th style="border-bottom: 1px solid #1a1a1a; padding: 3px 15px;">
-					Navratovy kod
+					Návratový kód
 				</th>
 				<th style="border-bottom: 1px solid #1a1a1a; padding: 3px 15px;">
 					Popis
