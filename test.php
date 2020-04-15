@@ -2,14 +2,14 @@
 /**
  *	Súbor:	test.php
  *	Autor:	Daniel Miloslav Očenáš (login:xocena06)
- *	Dátum:	Apr9l 2020
+ *	Dátum:	April 2020
  *	Popis:	Projekt 2 predmetu IPP, VUT FIT 2020.
  */
 define("ERR_INV_SCRIPT_PARAM", 10);
 define("ERR_USING_INPUT_FILE", 11);
 define("ERR_USING_OUTPUT_FILE", 12);
 define("PHP_SCRIPT_CMD","php7.4"); // php7.4 / php
-define("PYTHON_SCRIPT_CMD","py"); // python3.8 / py
+define("PYTHON_SCRIPT_CMD","python3.8"); // python3.8 / py
 
 /**
  * MAIN
@@ -213,7 +213,7 @@ class Test{
 						exec(PHP_SCRIPT_CMD .' '. $phpScript . ' < ' . $srcFullPath.' 2>&1',  $parseOutput, $parseReturnCode);
 						
 						// parser sa ukoncil spravne
-						if($parseReturnCode == 0 && intval($expectedResults['rc']) == 0 ){
+						if($parseReturnCode == 0  ){
 
 							$srcInterpretFullPath = $srcFile['path'].'/'.$srcFile['name'].'.xml';
 								
@@ -222,17 +222,23 @@ class Test{
 							//parse only testy
 							if(array_key_exists('parse-script',$this->scripts) === true && array_key_exists('int-script',$this->scripts) == false  ){
 								// /pub/courses/ipp/jexamxml/jexamxml.jar vas_vystup.xml referencni.xml delta.xml 
-								$outFile =  $srcFile['path'].'/'.$srcFile['name'].'.out';
+								if ( $expectedResults['rc'] == 0){
+									
+									$outFile =  $srcFile['path'].'/'.$srcFile['name'].'.out';
 
-								$returnFile =  $srcFile['path'].'/'.$srcFile['name'].'delta.xml';
-								
-								exec('java -jar '.$this->scripts['jexamxml'].' '.$srcInterpretFullPath.' '.$outFile.' '.$returnFile. ' /pub/courses/ipp/jexamxml/options',$xmlOutput, $xmlRetCode);
-								
-								
-								if ( $xmlRetCode == 0){								
-									$this->addTestResult($srcFullPath,'','Výstup sa zhoduje s referenčnym',$expectedResults['rc'],$parseReturnCode,true, 'TEST OK');
+									$returnFile =  $srcFile['path'].'/'.$srcFile['name'].'delta.xml';
+									
+									exec('java -jar '.$this->scripts['jexamxml'].' '.$srcInterpretFullPath.' '.$outFile.' '.$returnFile. ' /pub/courses/ipp/jexamxml/options',$xmlOutput, $xmlRetCode);
+									
+									
+									if ( $xmlRetCode == 0 ){								
+										$this->addTestResult($srcFullPath,'','',$expectedResults['rc'],$parseReturnCode,true, 'Výstup skriptu vyhodnotený nástrojom A7Soft JExamXML ako zhodný');
+									}else{
+										$this->addTestResult($srcFullPath,$xmlOutput,'Výstup sa nezhoduje s referenčným',$expectedResults['rc'],$parseReturnCode,false, 'Výstup skriptu vyhodnotený nástrojom A7Soft JExamXML ako odlišný');
+									}	
 								}else{
-									$this->addTestResult($srcFullPath,$xmlOutput,'Výstup sa nezhoduje s referenčným',$expectedResults['rc'],$parseReturnCode,false, 'Výstup testu sa nezhoduje s referenčným');
+									
+									$this->addTestResult($srcFullPath,'','Návratové kódy sa nezhodujú',$expectedResults['rc'],$parseReturnCode,false,'Návratovy kód sa nezhoduje s referenčným');
 								}
 							}
 							// vykonanie parse aj interpret testu
@@ -276,24 +282,24 @@ class Test{
 				$outputFile = $srcPath.'/'.$srcName.'.out';
 				$interpretOutputFile = $srcPath.'/'.$srcName.'.myout';
 				
-				file_put_contents($interpretOutputFile, implode('\n', $intOutput));
 
-				exec('diff ' . $interpretOutputFile . ' ' . $outputFile, $output , $diffReturnCode);
-				
+				file_put_contents($interpretOutputFile,implode(PHP_EOL, $intOutput));
+
+				exec('diff ' . $interpretOutputFile . ' ' . $outputFile , $output , $diffReturnCode);
 				// nastroj diff vyhodnoti vystupne subory ako zhodne
 				if($diffReturnCode == 0 ){
 					$this->addTestResult("$srcName.src",$expectedResults['out'],$intOutput,$expectedResults['rc'],$intReturnCode,true,'TEST OK');
 				}else{
-					$this->addTestResult("$srcName.src",$expectedResults['out'],$intOutput,$expectedResults['rc'],$intReturnCode,false,'Výstup testu sa nezhoduje s referenčným');
+					$this->addTestResult("$srcName.src",$expectedResults['out'],$intOutput,$expectedResults['rc'],$intReturnCode,false,'Výstup sa nezhoduje s referenčným, výsledok diff:'.PHP_EOL.implode(PHP_EOL, $output));
 				}
 			}else{
 				if($intReturnCode == intval($expectedResults['rc']) ){
 					$this->addTestResult("$srcName.src",'','Chybové návratové kódy sa zhodujú',$expectedResults['rc'],$intReturnCode,true,'TEST OK');
 				}else{
 					if(intval($expectedResults['rc']) == 0){
-						$this->addTestResult("$srcName.src",$expectedResults['out'],$intOutput,$expectedResults['rc'],$intReturnCode,false,'Návratovy kod sa nezhoduje s referenčným');
+						$this->addTestResult("$srcPath/$srcName.src",$expectedResults['out'],$intOutput,$expectedResults['rc'],$intReturnCode,false,'Návratovy kod sa nezhoduje s referenčným');
 					}else{
-						$this->addTestResult("$srcName.src",'',$intOutput,$expectedResults['rc'],$intReturnCode,false,'Návratový kód sa nezhoduje s referenčným');
+						$this->addTestResult("$srcPath/$srcName.src",'',$intOutput,$expectedResults['rc'],$intReturnCode,false,'Návratový kód sa nezhoduje s referenčným');
 					}
 				}
 			}
@@ -317,6 +323,7 @@ class Test{
 		if(is_array($return)){
 			$return = implode('&#10;',$return);
 		}
+		$path = str_replace("\\", "/", $path);
 		array_push($this->testResults,array(
 			'path' => $path,
 			'expectedReturn' => $expectedReturn,
@@ -399,14 +406,33 @@ foreach($results as $test){
 				<tr>
 					<td>Počet testov:</td>
 					<td><?php echo count($results); ?></td>
+					<td style="text-align: center; ">
+						<button onclick="showAll()" id="all" style="background-color: white; margin: 10px; border: none; padding: 5px; cursor: pointer; border-radius: 5px;">
+							Zobrazit všetky testy
+						</button>		
+					</td>
 				</tr>
 				<tr style="color: green">
 					<td>Počet úspešných testov</td>
 					<td><?php echo $successFull; ?></td>
+					<td style="text-align: center; ">
+						<button onclick="showPassed()" id="passed" style="background-color: green; margin: 10px; border: none; padding: 5px;cursor: pointer; border-radius: 5px;" >
+							Zobrazit úspešné testy
+						</button>
+					</td>
 				</tr>
 				<tr style="color: red">
 					<td>Počet neúspešných testov:</td>
 					<td><?php echo count($results) - $successFull; ?></td>
+					<td style="text-align: center; ">
+						<button onclick="showNotPassed()" id="not-passed" style="background-color: red; margin: 10px; border: none; padding: 5px;cursor: pointer; border-radius: 5px;" >
+							Zobrazit neúspešné testy
+						</button>
+					</td>
+				</tr>
+				<tr>
+					<td>Percentuálna úspešnosť:</td>
+					<td><?php echo round($successFull / count($results) *100,2) ; ?>%</td>
 				</tr>
 			</table>
 		</div>
@@ -437,16 +463,24 @@ foreach($results as $test){
 foreach($results as $result){
 
 ?>
-			<tr style="border-bottom: 1px solid #1a1a1a; padding: 3px 15px;
+				<tr 				
 				<?php 
-					if($result['result'] == true){
-						echo "color: green";
-					}
-					else{
-						echo "color: red";
-					}
+				if($result['result'] == true){
+					echo "class=\"passed\"";					
+				}
+				else{
+					echo "class=\"notPassed\" ";
+				}
 				?>
-			">
+				style="border-bottom: 1px solid #1a1a1a; padding: 3px 15px;
+				<?php 
+				if($result['result'] == true){
+					echo "color: green";
+				}
+				else{
+					echo "color: red";
+				}?>
+				">
 				<td  style="border-bottom: 1px solid #1a1a1a; padding: 3px 15px;">
 					<?php echo $result['path']; ?>					
 				</td>
@@ -473,6 +507,39 @@ foreach($results as $result){
 ?>
 		</table>
 	</body>
+	<script>
+		function showAll() {
+			
+			var x = document.getElementsByClassName("passed");
+			for (var i = 0; i < x.length; i++) {
+				x[i].style.display = 'table-row';
+			}
+			var y = document.getElementsByClassName("notPassed");
+			for (var i = 0; i < y.length; i++) {
+				y[i].style.display = 'table-row';
+			}
+		}
+		function showPassed() {
+			var x = document.getElementsByClassName("passed");
+			for (var i = 0; i < x.length; i++) {
+				x[i].style.display = 'table-row';
+			}
+			var y = document.getElementsByClassName("notPassed");
+			for (var i = 0; i < y.length; i++) {
+				y[i].style.display = 'none';
+			}
+		}
+		function showNotPassed() {
+			var x = document.getElementsByClassName("passed");
+			for (var i = 0; i < x.length; i++) {
+				x[i].style.display = 'none';
+			}
+			var y = document.getElementsByClassName("notPassed");
+			for (var i = 0; i < y.length; i++) {
+				y[i].style.display = 'table-row';
+			}
+		}
+	</script>
 </html> 
 <?php
 }

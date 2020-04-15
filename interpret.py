@@ -2,8 +2,8 @@
 
 ###
 #	Súbor:	interpret.py
-#	Autor:	Daniel Miloslav Očenáš (login:xocena06)
-#	Dátum:	Marec 2020
+#	Autor:	Daniel Miloslav Ocenas, login:xocena06
+#	Dátum:	April 2020
 #	Popis:	Projekt 2 predmetu IPP, VUT FIT 2020.
 
 import sys
@@ -12,7 +12,7 @@ import codecs
 import os.path as path
 import xml.etree.ElementTree as ET 
 
-debug = True
+debug = False
 
 
 def main():
@@ -21,13 +21,12 @@ def main():
 	:return: navratovy kod 0, uspesne ukoncenie programu     
 	"""
 	files = checkArgs()
-	# DEBUG print
-	debugPrint(files)
 
 	interpret = Interpret(files['source'])
 	interpret.start()
-	
+
 	sys.exit(0)
+
 
 class Interpret:
 	"""
@@ -42,8 +41,8 @@ class Interpret:
 		"""
 		self.xml = xml
 		self.insOrder = 0
-		self.lastInsOrder = 0
 		self.FRAME = Frame()
+		self.Labels = Label()
 
 	def start(self):
 		"""
@@ -54,28 +53,29 @@ class Interpret:
 		"""
 		
 		self.checkXMLRoot(self.xml)
-
-		self.FRAME.printFrames()
 		
 		self.xml = self.xml.findall("./")
+
+		self.Labels.setLabels(self.xml)
+
 
 		while self.insOrder < len(self.xml):
 
 			child = self.xml[self.insOrder]
-			instruction = Instruction(child, self.lastInsOrder, self.FRAME)
+			instruction = Instruction(child, self.FRAME)
 			
-			self.lastInsOrder = instruction.checkInstruction()
+			instruction.checkInstruction()
 			
 			instruction.insIdentifyExecute()
 			
-			self.insOrder += 1
-			
+			if instruction.makeJump is False:
+				self.insOrder += 1
+			else:
+				self.insOrder = self.Labels.jump(instruction.makeJump)
+
+			# debug print			
 			self.FRAME.printFrames()
 
-				# lastInsOrderChanged = int(self.xml[2].attrib['order'])
-				# print(lastInsOrderChanged)
-				# self.lastInsOrder = lastInsOrderChanged - 1
-				# self.insOrder = 2	
 				
 
 
@@ -95,6 +95,7 @@ class Interpret:
 			Error(Error.UnexpectedXML,'Nespravny poces atributov korenoveho uzlu program')
 		
 		attr = ['language','name','description']
+
 		for x in root.attrib:
 			if (x not in attr):
 				Error(Error.UnexpectedXML,"Nespravny atribut korenoveho uzlu program: '{0}' ".format(x))
@@ -121,15 +122,15 @@ class Instruction:
 	Trieda instruction
 	Vykonava operacie pre instrukcie z xml suboru
 	"""
-	def __init__(self, instruction, insOrder, FRAME):
+	def __init__(self, instruction, FRAME):
 		"""
 		Kontruktor triedy instruction
 		:param instruction: aktualne spracovavany uzol  
 		:param insOrder: aktualne poradie instrukcie programu
 		"""
 		self.instruction = instruction
-		self.lastInsOrder = insOrder
 		self.FRAME = FRAME
+		self.makeJump = False
 
 	def checkInstruction(self):
 		"""
@@ -146,12 +147,7 @@ class Instruction:
 			Error(Error.UnexpectedXML,'Nespravny tvar xml instrukcie')
 		
 		self.checkInsAtribs()
-
-		newInsOrder = int(self.instruction.attrib['order'])
-		if(self.lastInsOrder >= newInsOrder):
-			Error(Error.UnexpectedXML,'Nespravne poradie instrukcie')
 			
-		return newInsOrder
 
 	def checkInsAtribs(self):
 		"""
@@ -170,6 +166,7 @@ class Instruction:
 		Funkcia vykona syntakticku a lex kontrolu argumentov instrukcie
 		a vrati ich hodnotu
 		:param argcCount: ocakavany pocet argumentov instrukcie
+		:return: pole spracovanych argumentov obsahujuce hodnoty argumentu
 		"""
 		if (len(list(self.instruction)) != argcCount):
 			Error(Error.UnexpectedXML,"Nespravny pocet argumentov instrukcie: '{0}' ".format(self.instruction.attrib['opcode']))
@@ -192,44 +189,159 @@ class Instruction:
 			debugPrint(argValues)
 			return argValues
 
-		
-	def arithmeticInstruction(self,args,operation):
+	def checkVarSymbSymb(self,args):
 		"""
-		Vykona artimeticku operaciu zadanu parametrom operation a vysledok ulozi do var
-		:param args: operandy instrukcie v poradi <var> <symb> <symb>
-		:param operation: aritmeticka operacia
-		"""	
+		Pomocna funkcia pre kontrolu instrukcie s argumentmi <var> <symb1> <symb2>
+		:param args: pole argumentov
+		:return: list aktualna hodnot <symb1> a <symb2>
+		"""
+		var1 = Var(args[0]['type'], args[0]['value'])
+		var1.checkVar()
 		arg1 = Symb(args[1]['type'], args[1]['value'])
 		arg1Value = arg1.checkSymb()
-
 		arg2 = Symb(args[2]['type'], args[2]['value'])
 		arg2Value = arg2.checkSymb()
-
 		if(arg1Value['type'] == 'var'):
 			arg1Value = self.FRAME.getVar(arg1Value['value'])
-
 		if(arg2Value['type'] == 'var'):
 			arg2Value = self.FRAME.getVar(arg2Value['value'])
 
+		return arg1Value , arg2Value
+
+	def arithmeticInstruction(self,operation):
+		"""
+		Vykona artimeticku operaciu zadanu parametrom operation a vysledok ulozi do arg1 <var>
+		:param operation: operacny kod aritmetickej operacie
+		"""			
+		args = self.checkArgsCount(3)
+
+		#nacitanie hodnot
+		arg1Value , arg2Value = self.checkVarSymbSymb(args)
+
+		#obmedzenia typov
 		if arg1Value['type'] != 'int' or arg2Value['type'] != 'int':
 			Error(Error.WrongOPType,'Aritmeticky operator nieje typu int ')
 
-		var1 = Var(args[0]['type'], args[0]['value'])
-		var1.checkVar()
-
+		#logika instrukcii
 		result =  {'type':'int'}
 		if(operation == 'ADD'):
 			result['value'] = arg1Value['value'] + arg2Value['value']
-		if(operation == 'SUB'):
+		elif(operation == 'SUB'):
 			result['value'] = arg1Value['value'] - arg2Value['value']
-		if(operation == 'MUL'):
+		elif(operation == 'MUL'):
 			result['value'] = arg1Value['value'] * arg2Value['value']
-		if(operation == 'IDIV'):
+		elif(operation == 'IDIV'):
 			if arg2Value['value'] == 0:
-				Error(Error.WrongOpValue,('Delenie nulou'))
+				Error(Error.WrongOpValue,'Delenie nulou')
 			result['value'] = arg1Value['value'] // arg2Value['value']
 
 		self.FRAME.setVar(args[0]['value'],result)
+
+	def relationInstruction(self,operation):
+		"""
+		Vykona relacnu operaciu zadanu parametrom operation a vysledok ulozi do arg1 <var>
+		:param operation: operacny kod relacnej operacie
+		"""			
+		args = self.checkArgsCount(3)
+
+		#nacitanie hodnot
+		arg1Value , arg2Value = self.checkVarSymbSymb(args)
+		
+
+		#obmedzenia typov
+		if operation == 'EQ':
+			if arg1Value['type'] != arg2Value['type'] and not ( arg1Value['type'] != 'nil' or arg2Value['type'] != 'nil' ) :
+				Error(Error.WrongOPType,'EQ operator nieje spravneho typu ')
+		else:
+			if arg2Value['type'] == 'nil' or arg1Value['type'] == 'nil':
+				Error(Error.WrongOPType,'LT/GT operator nieje spravneho typu ')
+			if arg1Value['type'] != arg2Value['type'] :
+				Error(Error.WrongOPType,'LT/GT operator nieje spravneho typu ')
+
+		#logika instrukcii
+		result =  {'type':'bool'}
+		if(operation == 'LT'):
+			result['value'] = arg1Value['value'] < arg2Value['value']
+		elif(operation == 'GT'):
+			result['value'] = arg1Value['value'] > arg2Value['value']
+		elif(operation == 'EQ'):
+			result['value'] = arg1Value['value'] = arg2Value['value']
+
+		self.FRAME.setVar(args[0]['value'],result)
+
+	
+	def logicInstruction(self,args, operation):
+		"""
+		Vykona logicku operaciu zadanu parametrom operation a vysledok ulozi do arg1 <var>
+		:param operation: operacny kod logickej operacie
+		:param args: argumenty instrukcie
+		"""		
+		#nacitanie hodnot
+		var1 = Var(args[0]['type'], args[0]['value'])
+		var1.checkVar()
+		arg1 = Symb(args[1]['type'], args[1]['value'])
+		arg1Value = arg1.checkSymb()
+		if(arg1Value['type'] == 'var'):
+			arg1Value = self.FRAME.getVar(arg1Value['value'])
+
+		#obmedzenia typov
+		if operation != 'NOT':
+			if(arg2Value['type'] == 'var'):
+				arg2Value = self.FRAME.getVar(arg2Value['value'])
+			arg2 = Symb(args[2]['type'], args[2]['value'])
+			arg2Value = arg2.checkSymb()
+			
+			if arg2Value['type'] != 'bool':
+				Error(Error.WrongOPType,'Logicky operator nieje typu bool ')
+
+		if arg1Value['type'] != 'bool':
+			Error(Error.WrongOPType,'Logicky operator nieje typu bool ')
+
+		#logika instrukcie
+		result =  {'type':'bool'}
+		if(operation == 'AND'):
+			result['value'] = arg1Value['value'] and arg2Value['value']
+		elif(operation == 'OR'):
+			result['value'] = arg1Value['value'] or arg2Value['value']
+		elif(operation == 'NOT'):
+			result['value'] = not arg1Value['value']
+		
+		self.FRAME.setVar(args[0]['value'],result)
+
+
+	def conditionalJump(self,jumpType):
+		"""
+		Vykona skok ak je splnena skokova podmienka
+		:param jumpType: operacny kod instrukcie JUMPIFEQ / JUMPIFNEQ
+		"""
+		args = self.checkArgsCount(3)
+
+		#nacitanie hodnot
+		if args[0]['type'] != 'label':
+			Error(Error.WrongOPType,"{0}, arg1 type != 'label'. Chybny typ operandu".format(jumpType))
+		arg1 = Symb(args[1]['type'], args[1]['value'])
+		arg1Value = arg1.checkSymb()
+		arg2 = Symb(args[2]['type'], args[2]['value'])
+		arg2Value = arg2.checkSymb()
+		if(arg1Value['type'] == 'var'):
+			arg1Value = self.FRAME.getVar(arg1Value['value'])
+		if(arg2Value['type'] == 'var'):
+			arg2Value = self.FRAME.getVar(arg2Value['value'])
+
+		#obmedzenia typov
+		if arg1Value['type'] != arg2Value['type'] and not ( arg1Value['type'] != 'nil' or arg2Value['type'] != 'nil' ) :
+			Error(Error.WrongOPType,"Nespravna kombinacia typov <symb> podmieneneho skoku")
+
+		#logika instrukcie
+		if jumpType == 'JUMPIFEQ':
+			if arg1Value['value'] == arg2Value['value']:
+				self.makeJump = args[0]['value']
+				debugPrint('JUMPIFEQ executed')
+		else:
+			if arg1Value['value'] != arg2Value['value']:
+				self.makeJump = args[0]['value']
+				debugPrint('JUMPIFNEQ executed')
+			
 
 	def insIdentifyExecute(self):
 		"""
@@ -261,15 +373,19 @@ class Instruction:
 
 
 		# Tvar Instrukcie: OPCODE <label>
-		# TODO Instrukcia JUMP
+		# Instrukcia JUMP
 		elif (opCode == 'JUMP'):
 			args = self.checkArgsCount(1)
+			if args[0]['type'] != 'label':
+				Error(Error.WrongOPType,"Hodnota parameteru type argumentu instrukciu JUMP sa nezhoduje s typom label")
+
+			self.makeJump = args[0]['value']
 
 		# TODO Instrukcia CALL
 		elif (opCode == 'CALL'):
 			args = self.checkArgsCount(1)
 
-		# TODO Instrukcia Label
+		# Instrukcia Label
 		elif (opCode == 'LABEL'):
 			args = self.checkArgsCount(1)
 
@@ -285,13 +401,12 @@ class Instruction:
 
 			arg1 = Symb(args[0]['type'], args[0]['value'])
 			arg1Value = arg1.checkSymb()
-
 			if arg1Value['type'] == 'var':
 				arg1Value = self.FRAME.getVar(arg1Value['value'])
 
 			self.FRAME.dataStack.push(arg1Value)
 
-		# Instrukcia Write
+		# Instrukcia WRITE
 		elif (opCode == 'WRITE'):
 			args = self.checkArgsCount(1)
 			
@@ -324,12 +439,10 @@ class Instruction:
 
 			arg1 = Symb(args[0]['type'], args[0]['value'])
 			arg1Value = arg1.checkSymb()
-
 			if arg1Value['type'] != 'int' or arg1Value['value'] < 0 or arg1Value['value'] > 49 :
 				Error(Error.WrongOpValue,'Hodnota symb instrukcie EXIT je mimo interval 0 - 49' )
 			
 			sys.exit(arg1Value['value'])
-
 
 		# Instrukcia DPRINT
 		elif (opCode == 'DPRINT'):
@@ -337,7 +450,6 @@ class Instruction:
 			
 			arg1 = Symb(args[0]['type'], args[0]['value'])
 			arg1Value = arg1.checkSymb()
-
 			if arg1Value['type'] == 'var':
 				arg1Value = self.FRAME.getVar(arg1Value['value'])
 		
@@ -369,134 +481,244 @@ class Instruction:
 			args = self.checkArgsCount(2)
 
 			debugPrint('Move:')
-			arg2 = Symb(args[1]['type'], args[1]['value'])
-			arg2Value = arg2.checkSymb()
-
-			if arg2Value['type'] == 'var':
-				arg2Value = self.FRAME.getVar(arg2Value['value'])
 			
 			arg1 = Var(args[0]['type'], args[0]['value'])
 			arg1.checkVar()
+			arg2 = Symb(args[1]['type'], args[1]['value'])
+			arg2Value = arg2.checkSymb()
+			if arg2Value['type'] == 'var':
+				arg2Value = self.FRAME.getVar(arg2Value['value'])
 			
 			# nazov premennej (GF@ex), {'type': type, 'value': value}
 			self.FRAME.setVar(args[0]['value'], arg2Value)
 
-		# TODO Instrukcia STRLEN
+		# Instrukcia STRLEN
 		elif (opCode == 'STRLEN'):
 			args = self.checkArgsCount(2)
 
-		# TODO Instrukcia TYPE
+			arg1 = Var(args[0]['type'], args[0]['value'])
+			arg1.checkVar()
+			arg2 = Symb(args[1]['type'], args[1]['value'])
+			arg2Value = arg2.checkSymb()
+			if arg2Value['type'] == 'var':
+				arg2Value = self.FRAME.getVar(arg2Value['value'])
+
+			strLenValue = {'type':'int','value': len(arg2Value['value']) }
+
+			self.FRAME.setVar(args[0]['value'], strLenValue)
+
+
+		# Instrukcia TYPE
 		elif (opCode == 'TYPE'):
 			args = self.checkArgsCount(2)
+			
+			arg1 = Var(args[0]['type'], args[0]['value'])
+			arg1.checkVar()
+			arg2 = Symb(args[1]['type'], args[1]['value'])
+			arg2Value = arg2.checkSymb()
+			if arg2Value['type'] == 'var':
+				arg2Value = self.FRAME.getVar(arg2Value['value'],all=True)
 
-		# TODO Instrukcia INT2CHAR
+			myType = { 'type':'string','value':'' }
+	
+			# identifikovanie typu symbolu
+			if arg2Value['type'] is not None:
+				myType['value'] = arg2Value['type']
+
+			self.FRAME.setVar(args[0]['value'], myType)
+
+
+		# Instrukcia INT2CHAR TEST
 		elif (opCode == 'INT2CHAR'):
-			args = self.checkArgsCount(2)
+			args = self.checkArgsCount(2)			
+
+			arg1 = Var(args[0]['type'], args[0]['value'])
+			arg1.checkVar()
+			arg2 = Symb(args[1]['type'], args[1]['value'])
+			arg2Value = arg2.checkSymb()
+			if arg2Value['type'] == 'var':
+				arg2Value = self.FRAME.getVar(arg2Value['value'])
+
+			# povoleny len typ int
+			if arg2Value['type'] == 'int':
+				try:
+					arg2Value['value'] = chr(arg2Value['value'])
+					arg2Value['type'] = 'string'
+				except:
+	 				Error(Error.InvalidCharOperation,"hodnota mimo rozsah platnosti chr()")
+			else:
+				Error(Error.WrongOPType,"INT2CHAR arg2 type != int")
+
+			self.FRAME.setVar(args[0]['value'], arg2Value)
 
 
 		# Tvar Instrukcie: OPCODE <var> <type>
-
-		# TODO Instrukcia Read
+		# Instrukcia Read
 		elif (opCode == 'READ'):
 			args = self.checkArgsCount(2)
 
+			arg1 = Var(args[0]['type'], args[0]['value'])
+			arg1.checkVar()
+
+			inputValue = { 'type':args[1]['type'], 'value': None}
+
+			if args[1]['type'] == 'type':
+				try:
+					x = input()
+					debugPrint('INPUT READ:',end='')
+					debugPrint(x)
+					if args[1]['value'] == 'int':
+						inputValue['value'] = int(x)
+
+					elif args[1]['value'] == 'string':
+						inputValue['value'] = x
+
+					elif args[1]['value'] == 'bool':
+						if x.upper() == 'TRUE':
+							inputValue['value'] = True
+						else:
+							inputValue['value'] = False
+					else:
+						Error(Error.UnexpectedXML,"READ hodnota arg2 != int / string / bool")
+				except:
+					inputValue['type'] = 'nil'
+					inputValue['value'] = 'nil'
+			else:
+				Error(Error.WrongOPType,"READ arg2 type != type")
+
+			debugPrint(inputValue)
+
+			self.FRAME.setVar(args[0]['value'],inputValue)
 
 		# Tvar Instrukcie: OPCODE <var> <symb1> <symb2>
 		# Instrukcia ADD TEST
 		elif (opCode == 'ADD'):
-			args = self.checkArgsCount(3)
-			self.arithmeticInstruction(args,opCode)
+			self.arithmeticInstruction(opCode)
 
 		# Instrukcia SUB TEST
 		elif (opCode == 'SUB'):
-			args = self.checkArgsCount(3)
-			self.arithmeticInstruction(args,opCode)
+			self.arithmeticInstruction(opCode)
 			
 		# Instrukcia MUL TEST
 		elif (opCode == 'MUL'):
-			args = self.checkArgsCount(3)
-			self.arithmeticInstruction(args,opCode)
+			self.arithmeticInstruction(opCode)
 			
 		# Instrukcia IDIV TEST
 		elif (opCode == 'IDIV'):
-			args = self.checkArgsCount(3)
-			self.arithmeticInstruction(args,opCode)
+			self.arithmeticInstruction(opCode)
 			
-		# TODO Instrukcia LT
+		# Instrukcia LT TEST
 		elif (opCode == 'LT'):
-			args = self.checkArgsCount(3)
-			
-		# TODO Instrukcia GT
+			self.relationInstruction(opCode)
+
+		# Instrukcia GT TEST
 		elif (opCode == 'GT'):
-			args = self.checkArgsCount(3)
+			self.relationInstruction(opCode)
 			
-		# TODO Instrukcia EQ
+		# Instrukcia EQ TEST
 		elif (opCode == 'EQ'):
-			args = self.checkArgsCount(3)
+			self.relationInstruction(opCode)
 			
-		# TODO Instrukcia AND
+		# Instrukcia AND TEST
 		elif (opCode == 'AND'):
 			args = self.checkArgsCount(3)
+			self.logicInstruction(args,opCode)
 			
-		# TODO Instrukcia OR
+		# Instrukcia OR TEST
 		elif (opCode == 'OR'):
 			args = self.checkArgsCount(3)
+			self.logicInstruction(args,opCode)
 			
-		# TODO Instrukcia NOT
+		# Instrukcia NOT <var> <symb1> TEST
 		elif (opCode == 'NOT'):
-			args = self.checkArgsCount(3)
+			args = self.checkArgsCount(2)
+			self.logicInstruction(args,opCode)
 			
-		# TODO Instrukcia STRI2INT
+		# Instrukcia STRI2INT
 		elif (opCode == 'STRI2INT'):
 			args = self.checkArgsCount(3)
+			arg1Value , arg2Value = self.checkVarSymbSymb(args)		
+
+			if arg1Value['type'] != 'string' or arg2Value['type'] != 'int':
+				Error(Error.WrongOPType,'STRI2INT neplatny typ argumentu')
+			if len(arg1Value['value']) <= arg2Value['value'] or arg2Value['value'] < 0 :
+				Error(Error.InvalidCharOperation,"Indexacia mimo platny rozah retazecu")
+
+			str2intValue = {'type':'int','value':0}
+			try:
+				str2intValue['value'] = ord(arg1Value['value'][arg2Value['value']])
+			except:
+				Error(Error.InvalidCharOperation,"Hodnota mimo rozsah platnosti ord()")
 			
+			self.FRAME.setVar(args[0]['value'], str2intValue)
+
 		# Instrukcia CONCAT TEST
 		elif (opCode == 'CONCAT'):
 			args = self.checkArgsCount(3)
-			
-			arg1 = Symb(args[1]['type'], args[1]['value'])
-			arg1Value = arg1.checkSymb()
 
-			arg2 = Symb(args[2]['type'], args[2]['value'])
-			arg2Value = arg2.checkSymb()
-
-			if(arg1Value['type'] == 'var'):
-				arg1Value = self.FRAME.getVar(arg1Value['value'])
-
-			if(arg2Value['type'] == 'var'):
-				arg2Value = self.FRAME.getVar(arg2Value['value'])
+			arg1Value , arg2Value = self.checkVarSymbSymb(args)
 
 			if arg1Value['type'] != 'string' or arg2Value['type'] != 'string':
-				Error(Error.WrongOPType,'Retazcovy operator nieje typu string')
-
-			var1 = Var(args[0]['type'], args[0]['value'])
-			var1.checkVar()
+				Error(Error.WrongOPType,'CONCAT neplatny typ argumentu,nie je typu string')
 
 			result = {'type':'string', 'value': arg1Value['value'] + arg2Value['value'] }
 
 			self.FRAME.setVar( args[0]['value'], result )
 			
-		# TODO Instrukcia GETCHAR
+		# Instrukcia GETCHAR
 		elif (opCode == 'GETCHAR'):
 			args = self.checkArgsCount(3)
+
+			arg1Value , arg2Value = self.checkVarSymbSymb(args)
+
+			if arg1Value['type'] != 'string' or arg2Value['type'] != 'int':
+				Error(Error.WrongOPType,'GETCHAR neplatny typ argumentu')
+			if len(arg1Value['value']) <= arg2Value['value'] or arg2Value['value'] < 0 :
+				Error(Error.InvalidCharOperation,"Indexacia mimo platny rozah retazecu")
+			print(args[0]['value'])
 			
-		# TODO Instrukcia SETCHAR
+			try:
+				getChar = {'type':'string', 'value':arg1Value['value'][arg2Value['value'] ]}
+			except:
+				print('EXCEPT')
+				Error(Error.InvalidCharOperation,"Indexacia mimo platny rozah retazecu")
+
+			self.FRAME.setVar( args[0]['value'], getChar  )
+
+		# Instrukcia SETCHAR TEST
 		elif (opCode == 'SETCHAR'):
 			args = self.checkArgsCount(3)
 
+			arg1Value , arg2Value = self.checkVarSymbSymb(args)
 
+			if arg1Value['type'] != 'int' or arg2Value['type'] != 'string':
+				Error(Error.WrongOPType,'SETCHAR neplatny typ argumentu')
+
+			varChar = self.FRAME.getVar(args[0]['value'])
+
+			if len(arg2Value['value']) <= arg1Value['value'] or arg1Value['value'] < 0 :
+				Error(Error.InvalidCharOperation,"Indexacia mimo platny rozsah retazec")
+
+			try:
+				varChar['value'][ arg1Value['value'] ] = arg2Value['value'][0]
+				self.FRAME.setVar( args[0]['value'], varChar )
+			except:
+				Error(Error.InvalidCharOperation,"Indexacia mimo platny rozah retazec")
+		
+		
 		# Tvar Instrukcie: OPCODE <label> <symb1> <symb2>
-		# TODO Instrukcia JUMPIFQE
+		# Instrukcia JUMPIFQE
 		elif (opCode == 'JUMPIFEQ'):
-			args = self.checkArgsCount(3)
-			
-		# TODO Instrukcia JUMPIFNEQ
+			self.conditionalJump(opCode)
+
+		# Instrukcia JUMPIFNEQ
 		elif (opCode == 'JUMPIFNEQ'):
-			args = self.checkArgsCount(3)
+			self.conditionalJump(opCode)
+
+		# operacny kod instrukcie nebol identifikovany
 		else:
 			Error(Error.UnexpectedXML,"Neznamy operacny kod: '{0}' ".format(opCode))
 	
-
 
 class Var:
 	"""
@@ -574,7 +796,10 @@ class Symb:
 
 		# kontrola bool
 		elif self.typeSymb == 'bool':
-			if self.value != 'true' or self.value != 'false':
+			debugPrint('CHECK SYMB BOOL',end='')
+			debugPrint(self.typeSymb)
+			debugPrint(self.value)
+			if not (self.value == 'true' or self.value == 'false'):
 				Error(Error.UnexpectedXML,"Retazec {0} typu bool, nema spravny format".format(self.value))
 			
 			if self.value == 'true':
@@ -599,9 +824,84 @@ class Symb:
 			
 class Label:
 	"""
+	Trieda Label
+	Zabecpecuje kontrolu, definiciu navesti a skokove riadenie programu a kontrolu postupnosti instrukcii
 	"""
 	def __init__(self):
-		pass
+		"""
+		Label Konstruktor
+		"""
+		self.labels = [] 
+
+	def setLabels(self,xmlList):
+		"""
+		Vyhlada a definuje existujuce navestia
+		"""
+		lastInsOrder = 0
+		insRank = 0
+		
+		for ins in xmlList:
+			# kontrola vzostupnej postupnosti parametru order
+			newInsOrder = int(ins.attrib['order'])
+			if(lastInsOrder >= newInsOrder):
+				Error(Error.UnexpectedXML,'Radenie instrukci atributom order nieje vzostupna postupnost')
+			lastInsOrder = newInsOrder
+			
+			if ins.attrib['opcode'] == "LABEL":
+				labelName = self.checkLabel(ins)				
+
+				for label in self.labels:
+					if label['name'] == labelName:
+						Error(Error.SemanticErr,'Pokus o redefinaciu navestia: {0}'.format(labelName))
+
+				self.labels.append( {'name':labelName,'order': insRank } )
+			
+			insRank += 1
+
+	def jump(self,name):
+		"""
+		Vykona skok na navestie s nazvom name
+		Ak sa poukusi o skos na nedefinovane navestie, skript je ukonceny s prislusnou chybou
+		:param name: nazov navestia pre skok
+		:return: poradie instrukcie 
+		"""
+		self.checkLabelName(name)
+
+		for label in self.labels:
+			if label['name'] == name:
+				return label['order']
+		
+		Error(Error.SemanticErr,'Pokus o skok na navestie: {0}, kt. nebolo definovane'.format(name))
+
+	def checkLabel(self,instruction):
+		"""
+		vykona syntakticku a lexikalnu kontrolu navestia
+		:param name: nazov navestia
+		"""
+		
+		if (len(list(instruction)) != 1):
+			Error(Error.UnexpectedXML,"Nespravny pocet argumentov instrukcie Label, op. kod:{0} ".format(instruction.attrib['opcode']))
+
+		for child in instruction:
+			if child.tag != 'arg1':
+				Error(Error.UnexpectedXML,"Nazov argumentu instrukcie LABEL sa nezhoduje s arg1")
+
+			if child.attrib['type'] != 'label':
+				Error(Error.WrongOPType,"Parameter type argumentu instrukcie LABEL sa nezhoduje s typom label")
+
+			self.checkLabelName(child.text)
+		
+			return child.text
+
+	def checkLabelName(self,name):
+		"""
+		pomocna funkcia, kotrolujuca lexikalnu spravnost navestia
+		"""
+		if re.match(r'^[a-zA-Z_\-$&%*!?][a-zA-Z0-9_\-$&%*!?]*$', name):
+			pass
+		else:
+			Error(Error.UnexpectedXML,"Neplatny tvar navestia '{0}'".format(name))
+			
 
 class Frame:
 	"""
@@ -631,7 +931,7 @@ class Frame:
 		else:
 			return self.tempFrame		
 
-	def getVar(self,varName):
+	def getVar(self,varName,**kwargs):
 		"""
 		Funkcia sluzi na vyhladanie premennej v ramcoch.
 		Ak premenna neexistuje funkcia vyvola chybu s prislusnym chybovym kodom
@@ -646,9 +946,12 @@ class Frame:
 
 		# navrat premennej z globalneho ramca	
 		if(varFrame == 'GF'):
-			try:
-				if self.globalFrame[name]['value'] is None:
-					Error(Error.MissingValue, "Premennej {0} nebola pridelena hodnota".format(name))
+			try:		
+				if kwargs.get('all',None) is not None:
+					return self.globalFrame[name]
+				else:
+					if self.globalFrame[name]['value'] is None:
+						Error(Error.MissingValue, "Premennej {0} nebola pridelena hodnota".format(name))
 		
 				return self.globalFrame[name]
 			except KeyError:
@@ -683,9 +986,9 @@ class Frame:
 		
 		currentFrame = self.detectFrame(varName)
 		if currentFrame is None:
-			Error(Error.NotExistingFrame,"DEFVAR error, ramec {0} neexistuje".format(varFrame))
+			Error(Error.NotExistingFrame,"DEFVAR ramec {0} neexistuje".format(varFrame))
 		elif name in currentFrame:
-			Error(Error.SemanticErr,"DEFVAR error, premenna {0} uz v ramci {1} existuje".format(name,varFrame))
+			Error(Error.SemanticErr,"DEFVAR premenna {0} uz v ramci {1} existuje".format(name,varFrame))
 		else:
 			currentFrame[name] = {'type':None, 'value': None}
 
@@ -697,11 +1000,11 @@ class Frame:
 		"""
 		workFrame = self.detectFrame(varIdf)
 		name = varIdf.split('@',1)[1]
-		try:
-			if name in workFrame:
-				workFrame[name] = newValue
-		except:
-			Error(Error.NotExistingVariable,"Move error, premenna {0} nebola definovana".format(varIdf))
+
+		if name in workFrame:
+			workFrame[name] = newValue
+		else:
+			Error(Error.NotExistingVariable,"Premenna {0} nebola definovana".format(varIdf))
 			
 	def createFrame(self):
 		"""
@@ -799,8 +1102,9 @@ class Error:
 		:param code: chybovy navratovy kod
 		:param code: chybova hlaska
 		"""
-		print(msg, file=sys.stderr)
+		print('Err= '+msg, file=sys.stderr)
 		sys.exit(code)
+
 
 	# chybny/nepodporovany parameter skriptu
 	WrongScriptParam = 10
@@ -837,7 +1141,7 @@ class Error:
 	WrongOpValue = 57			
 	
 	# chybna praca s retazcom.
-	InvalidFrameOperation = 58	
+	InvalidCharOperation = 58	
 
 
 
@@ -877,7 +1181,7 @@ def checkArgs():
 			tree = ET.parse(filePtr)
 			match['source'] = tree.getroot()		
 		except:
-			Error(Error.InvalidXMLForm,'XML zdroj nieje well formed')
+			Error(Error.InvalidXMLForm,'XML subor nieje spravne formatovany')
 		filePtr.close()
 
 		sys.stdin = open(match['input'])
@@ -890,7 +1194,7 @@ def checkArgs():
 			tree = ET.parse(filePtr)
 			match['source'] = tree.getroot()
 		except:
-			Error(Error.InvalidXMLForm,'XML zdroj nieje well formed')
+			Error(Error.InvalidXMLForm,'XML subor nieje spravne formatovany')
 		filePtr.close()
 
 	elif(len(args) == 1 and 'input' in match and len(match['input']) > 0):
@@ -901,7 +1205,7 @@ def checkArgs():
 		try:
 			match['source'] = ET.fromstring(''.join(treeText))
 		except:
-			Error(Error.InvalidXMLForm,'XML zdroj nieje well formed')
+			Error(Error.InvalidXMLForm,'XML subor nieje spravne formatovany')
 	
 	else:
 		Error(Error.WrongScriptParam,"Neplatna kombinacia parametrov")
