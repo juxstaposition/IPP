@@ -212,10 +212,10 @@ class Test{
 						unset($parseOutput);
 						exec(PHP_SCRIPT_CMD .' '. $phpScript . ' < ' . $srcFullPath.' 2>&1',  $parseOutput, $parseReturnCode);
 						
+						$srcInterpretFullPath = $srcFile['path'].'/'.$srcFile['name'].'.xml';
+
 						// parser sa ukoncil spravne
 						if($parseReturnCode == 0  ){
-
-							$srcInterpretFullPath = $srcFile['path'].'/'.$srcFile['name'].'.xml';
 								
 							file_put_contents($srcInterpretFullPath,  implode(PHP_EOL, $parseOutput) );
 
@@ -288,18 +288,18 @@ class Test{
 				exec('diff ' . $interpretOutputFile . ' ' . $outputFile , $output , $diffReturnCode);
 				// nastroj diff vyhodnoti vystupne subory ako zhodne
 				if($diffReturnCode == 0 ){
-					$this->addTestResult("$srcName.src",$expectedResults['out'],$intOutput,$expectedResults['rc'],$intReturnCode,true,'TEST OK');
+					$this->addTestResult("$srcInterpretFullPath",$expectedResults['out'],$intOutput,$expectedResults['rc'],$intReturnCode,true,'TEST OK');
 				}else{
-					$this->addTestResult("$srcName.src",$expectedResults['out'],$intOutput,$expectedResults['rc'],$intReturnCode,false,'Výstup sa nezhoduje s referenčným, výsledok diff:'.PHP_EOL.implode(PHP_EOL, $output));
+					$this->addTestResult("$srcInterpretFullPath",$expectedResults['out'],$intOutput,$expectedResults['rc'],$intReturnCode,false,'Výstup sa nezhoduje s referenčným, výsledok diff:'.PHP_EOL.implode(PHP_EOL, $output));
 				}
 			}else{
 				if($intReturnCode == intval($expectedResults['rc']) ){
-					$this->addTestResult("$srcName.src",'','Chybové návratové kódy sa zhodujú',$expectedResults['rc'],$intReturnCode,true,'TEST OK');
+					$this->addTestResult("$srcInterpretFullPath",'','Chybové návratové kódy sa zhodujú',$expectedResults['rc'],$intReturnCode,true,'TEST OK');
 				}else{
 					if(intval($expectedResults['rc']) == 0){
-						$this->addTestResult("$srcPath/$srcName.src",$expectedResults['out'],$intOutput,$expectedResults['rc'],$intReturnCode,false,'Návratovy kod sa nezhoduje s referenčným');
+						$this->addTestResult("$srcInterpretFullPath",$expectedResults['out'],$intOutput,$expectedResults['rc'],$intReturnCode,false,'Návratovy kod sa nezhoduje s referenčným');
 					}else{
-						$this->addTestResult("$srcPath/$srcName.src",'',$intOutput,$expectedResults['rc'],$intReturnCode,false,'Návratový kód sa nezhoduje s referenčným');
+						$this->addTestResult("$srcInterpretFullPath",'',$intOutput,$expectedResults['rc'],$intReturnCode,false,'Návratový kód sa nezhoduje s referenčným');
 					}
 				}
 			}
@@ -407,7 +407,7 @@ foreach($results as $test){
 					<td>Počet testov:</td>
 					<td><?php echo count($results); ?></td>
 					<td style="text-align: center; ">
-						<button onclick="showAll()" id="all" style="background-color: white; margin: 10px; border: none; padding: 5px; cursor: pointer; border-radius: 5px;">
+						<button onclick="showResults('table-row','table-row')" id="all" style="background-color: white; margin: 10px; border: none; padding: 5px; cursor: pointer; border-radius: 5px;">
 							Zobrazit všetky testy
 						</button>		
 					</td>
@@ -416,7 +416,7 @@ foreach($results as $test){
 					<td>Počet úspešných testov</td>
 					<td><?php echo $successFull; ?></td>
 					<td style="text-align: center; ">
-						<button onclick="showPassed()" id="passed" style="background-color: green; margin: 10px; border: none; padding: 5px;cursor: pointer; border-radius: 5px;" >
+						<button onclick="showResults('table-row','none')" id="passed" style="background-color: green; margin: 10px; border: none; padding: 5px;cursor: pointer; border-radius: 5px;" >
 							Zobrazit úspešné testy
 						</button>
 					</td>
@@ -425,7 +425,7 @@ foreach($results as $test){
 					<td>Počet neúspešných testov:</td>
 					<td><?php echo count($results) - $successFull; ?></td>
 					<td style="text-align: center; ">
-						<button onclick="showNotPassed()" id="not-passed" style="background-color: red; margin: 10px; border: none; padding: 5px;cursor: pointer; border-radius: 5px;" >
+						<button onclick="showResults('none','table-row')" id="not-passed" style="background-color: red; margin: 10px; border: none; padding: 5px;cursor: pointer; border-radius: 5px;" >
 							Zobrazit neúspešné testy
 						</button>
 					</td>
@@ -437,24 +437,24 @@ foreach($results as $test){
 			</table>
 		</div>
 
-		<table style="margin: 0 auto; " >
-			<tr>
-				<th style="border-bottom: 1px solid #1a1a1a; padding: 3px 5px;">
+		<table style="margin: 0 auto;position: relative; " >
+			<tr  style="top:0;">
+				<th style="position: sticky;border-bottom: 1px solid #1a1a1a; padding: 3px 5px;">
 					Názov suboru .src		
 				</th>
-				<th style="border-bottom: 1px solid #1a1a1a; padding: 3px 5px;">
+				<th style="position: sticky;border-bottom: 1px solid #1a1a1a; padding: 3px 5px;">
 					Očakávaný výstup testu
 				</th>
-				<th style="border-bottom: 1px solid #1a1a1a; padding: 3px 5px;">
+				<th style="position: sticky;border-bottom: 1px solid #1a1a1a; padding: 3px 5px;">
 					Výstup testu
 				</th>
-				<th style="border-bottom: 1px solid #1a1a1a; padding: 3px 15px;">
+				<th style="position: sticky;border-bottom: 1px solid #1a1a1a; padding: 3px 15px;">
 					Očakávaný návratový kód				
 				</th>
-				<th style="border-bottom: 1px solid #1a1a1a; padding: 3px 15px;">
+				<th style="position: sticky;border-bottom: 1px solid #1a1a1a; padding: 3px 15px;">
 					Návratový kód
 				</th>
-				<th style="border-bottom: 1px solid #1a1a1a; padding: 3px 15px;">
+				<th style="position: sticky;border-bottom: 1px solid #1a1a1a; padding: 3px 15px;">
 					Popis
 				</th>
 			</tr>
@@ -481,7 +481,7 @@ foreach($results as $result){
 					echo "color: red";
 				}?>
 				">
-				<td  style="border-bottom: 1px solid #1a1a1a; padding: 3px 15px;">
+				<td  style="border-bottom: 1px solid #1a1a1a; padding: 3px 15px; text-align:left;">
 					<?php echo $result['path']; ?>					
 				</td>
 				<td  style="border-bottom: 1px solid #1a1a1a; padding: 3px 15px;">
@@ -508,35 +508,15 @@ foreach($results as $result){
 		</table>
 	</body>
 	<script>
-		function showAll() {
+		function showResults(passedVal, notPassedVal) {
 			
 			var x = document.getElementsByClassName("passed");
 			for (var i = 0; i < x.length; i++) {
-				x[i].style.display = 'table-row';
+				x[i].style.display = passedVal;
 			}
 			var y = document.getElementsByClassName("notPassed");
 			for (var i = 0; i < y.length; i++) {
-				y[i].style.display = 'table-row';
-			}
-		}
-		function showPassed() {
-			var x = document.getElementsByClassName("passed");
-			for (var i = 0; i < x.length; i++) {
-				x[i].style.display = 'table-row';
-			}
-			var y = document.getElementsByClassName("notPassed");
-			for (var i = 0; i < y.length; i++) {
-				y[i].style.display = 'none';
-			}
-		}
-		function showNotPassed() {
-			var x = document.getElementsByClassName("passed");
-			for (var i = 0; i < x.length; i++) {
-				x[i].style.display = 'none';
-			}
-			var y = document.getElementsByClassName("notPassed");
-			for (var i = 0; i < y.length; i++) {
-				y[i].style.display = 'table-row';
+				y[i].style.display = notPassedVal;
 			}
 		}
 	</script>
